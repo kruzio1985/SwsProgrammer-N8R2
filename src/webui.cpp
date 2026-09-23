@@ -29,13 +29,24 @@
 
 static WebServer server(80);
 
-/* Wspolny bufor odbioru pliku .bin (SWS + SPI). Rozmiar = wiekszy z limitow. */
-#define WEB_BUF_SIZE ((WEB_MAX_FW) > (SPI_WEB_MAX) ? (WEB_MAX_FW) : (SPI_WEB_MAX))
-
+/* Wspolny bufor odbioru pliku .bin (SWS + SPI), alokowany w PSRAM. */
 static uint8_t *upBuf = nullptr;
 static size_t upLen = 0;
 static bool upOverflow = false;
 static String upName;
+
+/* Rzeczywiste limity wgrywania wyliczane w webuiSetup z rozmiaru PSRAM.
+ * WEB_MAX_FW / SPI_WEB_MAX (config.h) to tylko gorne limity. */
+static uint32_t upCapFw = 0;    // limit obrazu TLSR = min(WEB_MAX_FW, wolne PSRAM)
+static uint32_t upCapSpi = 0;   // limit obrazu SPI  = min(SPI_WEB_MAX, wolne PSRAM)
+static uint32_t upMax = 0;      // rozmiar bufora = max(upCapFw, upCapSpi)
+
+static String upLimitMsg(bool spi) {
+    String m = "-ERR plik za duzy (limit ";
+    m += spi ? upCapSpi : upCapFw;
+    m += " B)";
+    return m;
+}
 
 /* --- pierscieniowy bufor logow (zywy podglad w WWW) -------------------------- */
 #define LOG_RING_SIZE 16384u   // potega 2 - indeks = seq & (SIZE-1)
@@ -425,10 +436,10 @@ static void onUpload() {
             upLen = 0;
             upOverflow = false;
             free(upBuf);
-            upBuf = (uint8_t *)ps_malloc(WEB_BUF_SIZE);  // PSRAM (N8R2 = 2 MB)
+            upBuf = upMax ? (uint8_t *)ps_malloc(upMax) : nullptr;
             if (!upBuf) upOverflow = true;
         } else if (upload.status == UPLOAD_FILE_WRITE) {
-            if (!upBuf || upLen + upload.currentSize > WEB_BUF_SIZE) {
+            if (!upBuf || upLen + upload.currentSize > upMax) {
                 upOverflow = true;
             } else {
                 memcpy(upBuf + upLen, upload.buf, upload.currentSize);
@@ -925,6 +936,22 @@ Gdy esptool otworzy port, programator sam wciśnie cel w bootloader i zmostkuje 
 <button onclick="run('VMEAS')">VMEAS</button>
 <button onclick="run('WAVE')">WAVE</button>
 </div>
+<div class="m">Pamięć PSRAM, analiza sygnałów i zrzuty pełnej zawartości:</div>
+<div class="row">
+<button onclick="run('MEMTEST')">MEMTEST</button>
+<button onclick="run('MEMTEST 2048')">MEMTEST 2MB</button>
+<button onclick="run('CAP 42 500000')">CAP SWS (0.5M)</button>
+<button onclick="run('CAP 42 2000000')">CAP SWS (2M)</button>
+<button onclick="run('OSC 4 2000')">OSC 1-Wire</button>
+<button onclick="run('OSC 8 2000')">OSC I²C SDA</button>
+<button onclick="tlsrDump()">⬇ Zrzut flasha TLSR (1 MB)</button>
+<button onclick="spiDump()">⬇ Zrzut SPI flash</button>
+</div>
+<div class="m" id="cacheinfo">Bufor firmware: …</div>
+<div class="row">
+<button class="green" onclick="cacheVerify()">Weryfikuj bufor</button>
+<button class="danger" onclick="cacheFlash()">Wgraj bufor (zapis!)</button>
+</div>
 <div class="m">Wyniki poleceń trafiają do okna logów na dole strony.</div>
 </section>
 
@@ -1033,6 +1060,29 @@ async function upload(path){
 }
 function verify(){upload('/api/verify');}
 function flash(){upload('/api/flash');}
+function dl(path,name){
+  logMsg('Pobieram '+name+'...\n');
+  const x=document.createElement('a');x.href=path;x.download=name;document.body.appendChild(x);x.click();x.remove();
+}
+function tlsrDump(){dl('/api/tlsrdump','ts0201_full.bin');}
+function spiDump(){dl('/api/spidump','spiflash_full.bin');}
+async function cacheVerify(){
+  logMsg('Weryfikacja bufora firmware...\n');
+  try{
+    const a=document.getElementById('addr').value.trim()||'0';
+    const r=await fetch('/api/verify',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'addr='+encodeURIComponent(a)});
+    logMsg(await r.text()+'\n');
+  }catch(e){logMsg('BŁĄD: '+e+'\n');}
+}
+async function cacheFlash(){
+  if(!document.getElementById('consent').checked){logMsg('-ERR zaznacz zgodę na zapis (konsola zapisu)\n');return;}
+  logMsg('Wgrywam bufor firmware...\n');
+  try{
+    const a=document.getElementById('addr').value.trim()||'0';
+    const r=await fetch('/api/flash',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'addr='+encodeURIComponent(a)+'&consent=1'});
+    logMsg(await r.text()+'\n');
+  }catch(e){logMsg('BŁĄD: '+e+'\n');}
+}
 async function spiRead(){
   const a=document.getElementById('spiadr').value.trim()||'0';
   const l=document.getElementById('spilen').value.trim()||'1000';
@@ -1499,6 +1549,11 @@ async function refreshStatus(){
       ' · STA: '+(j.sta?j.sta:'(brak)')+(j.sta_ip?(' · '+j.sta_ip):'')+
       ' · PSRAM '+(j.psram/1048576).toFixed(1)+' MB'+
       (j.sd?' · SD ✔':' · SD ✖');
+    const c=document.getElementById('cacheinfo');
+    if(c){
+      c.innerHTML='Bufor firmware: '+(j.up_len?('<b>'+j.up_name+'</b> ('+j.up_len+' B) — weryfikuj lub wgraj ponownie bez uploadu'):'(pusty — wgraj plik .bin)')+
+        ' · limity: TLSR '+Math.round(j.up_cap_fw/1024)+' KB, SPI '+Math.round(j.up_cap_spi/1048576)+' MB';
+    }
   }catch(e){}
 }
 syncConsent();
@@ -1537,8 +1592,8 @@ document.getElementById('rs485tx').addEventListener('keydown',function(e){if(e.k
     h.replace("@EIO0@", String(ESP_IO0_PIN));
     h.replace("@EEN@", String(ESP_EN_PIN));
     h.replace("@EBR@", String(ESP_BRIDGE_PORT));
-    h.replace("@MAXFW@", String(WEB_MAX_FW));
-    h.replace("@SPIMAX@", String(SPI_WEB_MAX));
+    h.replace("@MAXFW@", String(upCapFw));
+    h.replace("@SPIMAX@", String(upCapSpi));
 
     server.send(200, "text/html; charset=utf-8", h);
 }
@@ -1546,11 +1601,17 @@ document.getElementById('rs485tx').addEventListener('keydown',function(e){if(e.k
 static void handleStatus() {
     bool connected = WiFi.status() == WL_CONNECTED;
     bool sd = sdCardMounted();
-    char j[448];
+    String un = upName;
+    if (un.length() > 48) {
+        un = un.substring(0, 45);
+        un += "...";
+    }
+    char j[768];
     snprintf(j, sizeof(j),
              "{\"ap\":\"%s\",\"ip\":\"%s\",\"sta\":\"%s\",\"sta_ip\":\"%s\","
              "\"uptime_ms\":%lu,\"free_heap\":%u,\"psram\":%u,"
              "\"sws_pin\":%d,\"rst_pin\":%d,\"flash_size\":%u,"
+             "\"up_name\":\"%s\",\"up_len\":%u,\"up_cap_fw\":%u,\"up_cap_spi\":%u,"
              "\"sd\":%s,\"sd_type\":\"%s\",\"sd_total\":%llu,\"sd_used\":%llu}",
              WEB_AP_SSID, WiFi.softAPIP().toString().c_str(),
              staSsid.c_str(),
@@ -1558,6 +1619,7 @@ static void handleStatus() {
              (unsigned long)millis(), (unsigned)ESP.getFreeHeap(),
              (unsigned)ESP.getPsramSize(),
              SWS_PIN, RST_PIN, (unsigned)SWS_FLASH_SIZE,
+             un.c_str(), (unsigned)upLen, (unsigned)upCapFw, (unsigned)upCapSpi,
              sd ? "true" : "false", sdCardTypeName(),
              (unsigned long long)sdCardTotalBytes(),
              (unsigned long long)sdCardUsedBytes());
@@ -1598,7 +1660,7 @@ static void handleRun() {
 static void handleVerify() {
     if (!upBuf || !upLen || upOverflow) {
         server.send(400, "text/plain; charset=utf-8",
-                    upOverflow ? "-ERR plik za duzy (limit WEB_MAX_FW)" : "-ERR brak pliku (pole: firmware)");
+                    upOverflow ? upLimitMsg(false) : String("-ERR brak pliku (pole: firmware)"));
         return;
     }
     uint32_t addr = parseAddr();
@@ -1656,7 +1718,7 @@ static void handleFlash() {
     }
     if (!upBuf || !upLen || upOverflow) {
         server.send(400, "text/plain; charset=utf-8",
-                    upOverflow ? "-ERR plik za duzy (limit WEB_MAX_FW)" : "-ERR brak pliku (pole: firmware)");
+                    upOverflow ? upLimitMsg(false) : String("-ERR brak pliku (pole: firmware)"));
         return;
     }
     uint32_t addr = parseAddr();
@@ -1837,10 +1899,94 @@ static void handleSpiRead() {
     }
 }
 
+static void handleTlsrDump() {
+    /* Pelny zrzut flasha TLSR825x (1 MB) do PSRAM + pobranie jako .bin.
+     * Dwa przejscia: najpierw odczyt calej kosci do bufora w PSRAM, potem
+     * wysylka jednym ciagiem - klient dostaje spojny obraz nawet jesli odczyt
+     * trwa kilka sekund. */
+    uint32_t len = SWS_FLASH_SIZE;
+    uint8_t *buf = (uint8_t *)ps_malloc(len);
+    if (!buf) {
+        server.send(500, "text/plain; charset=utf-8", "-ERR brak PSRAM na bufor zrzutu");
+        return;
+    }
+
+    uint8_t div = swsUnitToDiv(swsGetUnitUs());
+    if (!swsLinkTest(div, true)) {
+        free(buf);
+        server.send(500, "text/plain; charset=utf-8", "-ERR brak lacza SWS");
+        return;
+    }
+
+    uint32_t a = 0, rem = len;
+    bool ok = true;
+    while (rem) {
+        uint32_t c = rem < SWS_SWS_BURST ? rem : (uint32_t)SWS_SWS_BURST;
+        if (!swsFlashRead(a, buf + a, c)) { ok = false; break; }
+        a += c;
+        rem -= c;
+    }
+    if (!ok) {
+        /* Dopelnij 0xFF, zeby klient nie wisial na krotszej odpowiedzi. */
+        memset(buf + a, 0xFF, rem);
+    }
+
+    server.setContentLength(len);
+    server.sendHeader("Content-Disposition", "attachment; filename=\"ts0201_full.bin\"");
+    server.send(200, "application/octet-stream", "");
+    uint32_t pos = 0;
+    while (pos < len) {
+        uint32_t c = len - pos < 4096 ? len - pos : 4096;
+        server.sendContent((const char *)(buf + pos), c);
+        pos += c;
+    }
+    free(buf);
+}
+
+static void handleSpiDump() {
+    /* Pelny zrzut zewnetrznej kosci SPI flash (rozmiar z JEDEC) do PSRAM. */
+    uint32_t jedec = 0;
+    if (!spiFlashJedecId(&jedec)) {
+        server.send(500, "text/plain; charset=utf-8", "-ERR brak kosci SPI");
+        return;
+    }
+    uint32_t len = spiFlashChipSize(jedec);
+    if (len == 0 || len > SPI_FLASH_MAX_ADDR) {
+        server.send(500, "text/plain; charset=utf-8", "-ERR nieznany rozmiar kosci SPI");
+        return;
+    }
+    uint8_t *buf = (uint8_t *)ps_malloc(len);
+    if (!buf) {
+        server.send(500, "text/plain; charset=utf-8", "-ERR brak PSRAM na bufor zrzutu");
+        return;
+    }
+
+    uint32_t a = 0, rem = len;
+    bool ok = true;
+    while (rem) {
+        uint32_t c = rem < 4096 ? rem : 4096;
+        if (!spiFlashRead(a, buf + a, c)) { ok = false; break; }
+        a += c;
+        rem -= c;
+    }
+    if (!ok) memset(buf + a, 0xFF, rem);
+
+    server.setContentLength(len);
+    server.sendHeader("Content-Disposition", "attachment; filename=\"spiflash_full.bin\"");
+    server.send(200, "application/octet-stream", "");
+    uint32_t pos = 0;
+    while (pos < len) {
+        uint32_t c = len - pos < 4096 ? len - pos : 4096;
+        server.sendContent((const char *)(buf + pos), c);
+        pos += c;
+    }
+    free(buf);
+}
+
 static void handleSpiVerify() {
     if (!upBuf || !upLen || upOverflow) {
         server.send(400, "text/plain; charset=utf-8",
-                    upOverflow ? "-ERR plik za duzy (limit SPI_WEB_MAX)" : "-ERR brak pliku (pole: firmware)");
+                    upOverflow ? upLimitMsg(true) : String("-ERR brak pliku (pole: firmware)"));
         return;
     }
     uint32_t addr = parseAddr();
@@ -1891,7 +2037,7 @@ static void handleSpiWrite() {
     }
     if (!upBuf || !upLen || upOverflow) {
         server.send(400, "text/plain; charset=utf-8",
-                    upOverflow ? "-ERR plik za duzy (limit SPI_WEB_MAX)" : "-ERR brak pliku (pole: firmware)");
+                    upOverflow ? upLimitMsg(true) : String("-ERR brak pliku (pole: firmware)"));
         return;
     }
     uint32_t addr = parseAddr();
@@ -2772,6 +2918,25 @@ static void handleNotFound() {
 void webuiSetup() {
     wifiLoad();
 
+    /* Limity wgrywania zalezne od PSRAM: N8R2 = 2 MB, N16R8 = 8 MB.
+     * Margines zostawiamy na SD, przechwytywanie i oscyloskop. */
+    {
+        uint32_t psram = ESP.getPsramSize();
+        const uint32_t margin = 512u * 1024u;
+        uint32_t avail = psram > margin ? psram - margin : psram;
+        upCapFw = avail < WEB_MAX_FW ? avail : WEB_MAX_FW;
+        upCapSpi = avail < SPI_WEB_MAX ? avail : SPI_WEB_MAX;
+        upMax = upCapFw > upCapSpi ? upCapFw : upCapSpi;
+        if (upMax < (64u * 1024u)) upMax = 64u * 1024u;   // minimum awaryjne
+    }
+    g_out->print("WWW: limity wgrywania: TLSR=");
+    g_out->print(upCapFw);
+    g_out->print(" B, SPI=");
+    g_out->print(upCapSpi);
+    g_out->print(" B (PSRAM ");
+    g_out->print((unsigned)ESP.getPsramSize());
+    g_out->print(" B)\r\n");
+
     /* Zawsze AP_STA: AP do konfiguracji + opcjonalnie STA do sieci domowej.
      * Dzieki temu skanowanie WiFi dziala, a AP pozostaje dostepne. */
     WiFi.mode(WIFI_AP_STA);
@@ -2791,6 +2956,8 @@ void webuiSetup() {
     server.on("/api/awr", HTTP_POST, handleAwrite);
     server.on("/api/adump", HTTP_GET, handleAdump);
     server.on("/api/spiread", HTTP_GET, handleSpiRead);
+    server.on("/api/tlsrdump", HTTP_GET, handleTlsrDump);
+    server.on("/api/spidump", HTTP_GET, handleSpiDump);
     server.on("/api/spiverify", HTTP_POST, handleSpiVerify);
     server.on("/api/spiwrite", HTTP_POST, handleSpiWrite);
     server.on("/api/spierase", HTTP_POST, handleSpiErase);

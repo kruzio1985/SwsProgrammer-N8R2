@@ -37,6 +37,9 @@
  *   MSPIR <adr> [n]         - odczyt rejestru/SRAM ukladu (np. 40000)
  *   MSPIW <adr> <hex...>    - zapis rejestru/SRAM ukladu + odczyt kontrolny
  *   SRAMTEST [n]            - test bledow lacza SWS na SRAM (bez flasha)
+ *   MEMTEST [KB]            - test PSRAM + SRAM ESP32 (wzorce, walking)
+ *   CAP <pin> [n] [div]     - logic analyzer: n probek do PSRAM + RLE
+ *   OSC <pin> [n] [us]      - mini-oscyloskop ADC: n probek + statystyki
  *   MSPIWATCH [ms]          - czy rejestry MSPI zmieniaja sie same
  *   HALT [ms]               - aktywacja + weryfikacja [0x0602]=0x05
  *   BPOLL <0|1>             - czekanie na BUSY przed zapisem bajtu (jak SDK)
@@ -294,6 +297,9 @@ static void cmdHelp() {
         "  MSPIR <adr> [n]       - odczyt rejestru/SRAM ukladu (np. 40000)\r\n"
         "  MSPIW <adr> <hex...>  - zapis rejestru/SRAM ukladu + odczyt kontrolny\r\n"
         "  SRAMTEST [n]          - test bledow lacza SWS na SRAM (bez flasha)\r\n"
+        "  MEMTEST [KB]          - test PSRAM + SRAM ESP32 (wzorce, walking)\r\n"
+        "  CAP <pin> [n] [div]   - logic analyzer: n probek do PSRAM + RLE\r\n"
+        "  OSC <pin> [n] [us]    - mini-oscyloskop ADC: n probek + statystyki\r\n"
         "  MSPIWATCH [ms]        - czy rejestry MSPI zmieniaja sie same\r\n"
         "  HALT [ms]             - aktywacja + weryfikacja [0x0602]=0x05\r\n"
         "  BPOLL <0|1>           - czekanie na BUSY przed zapisem bajtu (jak SDK)\r\n"
@@ -1620,6 +1626,277 @@ static void cmdSramtest(uint32_t n) {
                                : "+OK SRAMTEST - 0 bledow, lacze SWS bez zarzutu\r\n");
 }
 
+/* --- MEMTEST: test wlasnej pamieci ESP32 (PSRAM + SRAM), nie ukladu celu ------ */
+static uint32_t memPatCheck(const uint8_t *buf, uint32_t n, uint8_t pat,
+                            uint32_t *firstOff) {
+    uint32_t bad = 0;
+    bool haveFirst = false;
+    for (uint32_t i = 0; i < n; i++) {
+        if (buf[i] != pat) {
+            bad++;
+            if (!haveFirst) { *firstOff = i; haveFirst = true; }
+        }
+    }
+    return bad;
+}
+
+static void memRunPatterns(const char *what, uint8_t *buf, uint32_t n) {
+    const uint8_t pats[4] = {0xAA, 0x55, 0x00, 0xFF};
+    for (int k = 0; k < 4; k++) {
+        memset(buf, pats[k], n);
+        uint32_t first = 0xFFFFFFFF;
+        uint32_t bad = memPatCheck(buf, n, pats[k], &first);
+        g_out->print(what);
+        g_out->print(" wzorzec ");
+        printHex8(pats[k]);
+        g_out->print(": blednych bajtow = ");
+        g_out->print(bad);
+        if (bad) {
+            g_out->print(" (pierwszy pod +0x");
+            g_out->print(first, HEX);
+            g_out->print(")");
+        }
+        g_out->print("\r\n");
+    }
+
+    /* Walking-1 / walking-0 na pierwszych 64 KB (szybki test adresacji). */
+    uint32_t words = (n > (64u * 1024u)) ? (64u * 1024u) / 4 : n / 4;
+    if (words) {
+        uint32_t *w = (uint32_t *)buf;
+        uint32_t badW = 0;
+        for (uint32_t bit = 0; bit < 32; bit++) {
+            uint32_t v = 1u << bit;
+            for (uint32_t i = 0; i < words; i++) w[i] = v;
+            for (uint32_t i = 0; i < words; i++) if (w[i] != v) badW++;
+        }
+        for (uint32_t bit = 0; bit < 32; bit++) {
+            uint32_t v = ~(1u << bit);
+            for (uint32_t i = 0; i < words; i++) w[i] = v;
+            for (uint32_t i = 0; i < words; i++) if (w[i] != v) badW++;
+        }
+        g_out->print(what);
+        g_out->print(" walking-1/0 (");
+        g_out->print(words * 4);
+        g_out->print(" B): blednych slow = ");
+        g_out->print(badW);
+        g_out->print("\r\n");
+    }
+}
+
+static void cmdMemtest(uint32_t kb) {
+    const uint32_t psram = ESP.getPsramSize();
+    g_out->print("MEMTEST: PSRAM ");
+    g_out->print(psram);
+    g_out->print(" B, wolna sterta ");
+    g_out->print((unsigned)ESP.getFreeHeap());
+    g_out->print(" B\r\n");
+
+    if (psram) {
+        uint32_t want = psram / 2;
+        if (want > (4u * 1024u * 1024u)) want = 4u * 1024u * 1024u;
+        if (kb) {
+            uint32_t asked = kb * 1024u;
+            if (asked > psram / 2) asked = psram / 2;
+            want = asked;
+        }
+        if (want < (16u * 1024u)) want = 16u * 1024u;
+
+        uint32_t t0 = millis();
+        uint8_t *buf = (uint8_t *)ps_malloc(want);
+        if (buf) {
+            g_out->print("PSRAM: testuje ");
+            g_out->print(want);
+            g_out->print(" B...\r\n");
+            memRunPatterns("PSRAM", buf, want);
+            g_out->print("+OK MEMTEST PSRAM ");
+            g_out->print(want);
+            g_out->print(" B, czas ");
+            g_out->print((uint32_t)(millis() - t0));
+            g_out->print(" ms\r\n");
+            free(buf);
+        } else {
+            g_out->print("-ERR nie udalo sie zaalokowac ");
+            g_out->print(want);
+            g_out->print(" B w PSRAM\r\n");
+        }
+    }
+
+    uint32_t freeHeap = (uint32_t)ESP.getFreeHeap();
+    uint32_t sram = freeHeap > (64u * 1024u) ? (64u * 1024u) : freeHeap / 2;
+    if (sram >= 4096u) {
+        uint8_t *sbuf = (uint8_t *)malloc(sram);
+        if (sbuf) {
+            g_out->print("SRAM: testuje ");
+            g_out->print(sram);
+            g_out->print(" B...\r\n");
+            memRunPatterns("SRAM", sbuf, sram);
+            g_out->print("+OK MEMTEST SRAM ");
+            g_out->print(sram);
+            g_out->print(" B\r\n");
+            free(sbuf);
+        } else {
+            g_out->print("-ERR nie udalo sie zaalokowac ");
+            g_out->print(sram);
+            g_out->print(" B w SRAM\r\n");
+        }
+    } else {
+        g_out->print("SRAM: pominieto (za malo wolnej sterty)\r\n");
+    }
+}
+
+/* --- CAP: logic analyzer na jednym pinie (gleboki bufor PSRAM) --------------- */
+static void cmdCapture(uint32_t pin, uint32_t samples, uint32_t div) {
+    if (pin > 48) {
+        g_out->print("-ERR pin 0..48\r\n");
+        return;
+    }
+    if (samples == 0) samples = 200000;
+    uint32_t psFree = (uint32_t)ESP.getFreePsram();
+    if (samples > psFree) {
+        g_out->print("-ERR za duzo probek (wolne PSRAM ");
+        g_out->print(psFree);
+        g_out->print(" B)\r\n");
+        return;
+    }
+    uint8_t *buf = (uint8_t *)ps_malloc(samples);
+    if (!buf) {
+        g_out->print("-ERR brak PSRAM\r\n");
+        return;
+    }
+
+    pinMode(pin, INPUT);
+    uint32_t t0 = micros();
+    if (div <= 1) {
+        for (uint32_t i = 0; i < samples; i++) buf[i] = digitalRead(pin) ? 1 : 0;
+    } else {
+        for (uint32_t i = 0; i < samples; i++) {
+            buf[i] = digitalRead(pin) ? 1 : 0;
+            delayMicroseconds(div - 1);
+        }
+    }
+    uint32_t us = micros() - t0;
+
+    g_out->print("+CAP pin=");
+    g_out->print(pin);
+    g_out->print(" probek=");
+    g_out->print(samples);
+    g_out->print(" czas=");
+    g_out->print(us);
+    g_out->print(" us (");
+    if (us) g_out->print((uint32_t)((uint64_t)samples * 1000000u / us));
+    else g_out->print('?');
+    g_out->print(" probek/s)\r\n");
+
+    uint32_t edges = 0, high = 0, run = 0;
+    uint32_t minHigh = 0xFFFFFFFFu, maxHigh = 0;
+    uint32_t minLow = 0xFFFFFFFFu, maxLow = 0;
+    uint8_t last = buf[0];
+    for (uint32_t i = 0; i < samples; i++) {
+        if (buf[i]) high++;
+        if (buf[i] == last) { run++; continue; }
+        if (last) {
+            edges++;
+            if (run < minHigh) minHigh = run;
+            if (run > maxHigh) maxHigh = run;
+        } else {
+            if (run < minLow) minLow = run;
+            if (run > maxLow) maxLow = run;
+        }
+        last = buf[i];
+        run = 1;
+    }
+    if (last) {
+        if (run < minHigh) minHigh = run;
+        if (run > maxHigh) maxHigh = run;
+    } else {
+        if (run < minLow) minLow = run;
+        if (run > maxLow) maxLow = run;
+    }
+
+    g_out->print("krawedzi=");
+    g_out->print(edges);
+    g_out->print(" HIGH=");
+    g_out->print(high);
+    g_out->print("/");
+    g_out->print(samples);
+    g_out->print(" (");
+    if (samples) g_out->print((uint32_t)((uint64_t)high * 100u / samples));
+    g_out->print("%)\r\n");
+    if (maxHigh) {
+        g_out->print("HIGH min=");
+        g_out->print(minHigh);
+        g_out->print(" max=");
+        g_out->print(maxHigh);
+        g_out->print(" probek\r\n");
+    }
+    if (maxLow) {
+        g_out->print("LOW  min=");
+        g_out->print(minLow);
+        g_out->print(" max=");
+        g_out->print(maxLow);
+        g_out->print(" probek\r\n");
+    }
+    g_out->print("+OK CAP\r\n");
+    free(buf);
+}
+
+/* --- OSC: mini-oscyloskop ADC (gleboki bufor PSRAM) -------------------------- */
+static void cmdOsc(uint32_t pin, uint32_t samples, uint32_t us) {
+    if (pin > 48) {
+        g_out->print("-ERR pin 0..48\r\n");
+        return;
+    }
+    if (samples == 0) samples = 2000;
+    if (samples > 65535) samples = 65535;
+    uint16_t *buf = (uint16_t *)ps_malloc(samples * 2u);
+    if (!buf) {
+        g_out->print("-ERR brak PSRAM\r\n");
+        return;
+    }
+
+    pinMode(pin, INPUT);
+    analogSetPinAttenuation(pin, ADC_11db);
+    uint32_t t0 = micros();
+    for (uint32_t i = 0; i < samples; i++) {
+        buf[i] = (uint16_t)analogRead(pin);
+        if (us) delayMicroseconds(us);
+    }
+    uint32_t elapsed = micros() - t0;
+
+    uint32_t minV = 65535u, maxV = 0;
+    uint64_t sum = 0;
+    for (uint32_t i = 0; i < samples; i++) {
+        uint16_t v = buf[i];
+        if (v < minV) minV = v;
+        if (v > maxV) maxV = v;
+        sum += v;
+    }
+    uint32_t avg = (uint32_t)(sum / samples);
+
+    g_out->print("+OSC pin=");
+    g_out->print(pin);
+    g_out->print(" probek=");
+    g_out->print(samples);
+    g_out->print(" czas=");
+    g_out->print(elapsed);
+    g_out->print(" us min=");
+    g_out->print(minV);
+    g_out->print(" max=");
+    g_out->print(maxV);
+    g_out->print(" avg=");
+    g_out->print(avg);
+    g_out->print("\r\n");
+
+    uint32_t n = samples < 4096 ? samples : 4096;
+    g_out->print("+ADC ");
+    for (uint32_t i = 0; i < n; i++) {
+        g_out->print(buf[i]);
+        if (i + 1 < n) g_out->print(',');
+    }
+    g_out->print("\r\n");
+    free(buf);
+}
+
 /* --- MSPIWATCH: czy rejestry MSPI zmieniaja sie bez naszego udzialu ---------- */
 static void cmdMspiwatch(uint32_t ms) {
     if (!ms) ms = 2000;
@@ -2339,6 +2616,23 @@ void dispatch(char *line) {
         char *t1 = nextTok(p);
         if (t1) parseU32(t1, n);
         cmdSramtest(n);
+    } else if (!strcasecmp(cmd, "MEMTEST")) {
+        uint32_t kb = 0;
+        char *t1 = nextTok(p);
+        if (t1) parseU32(t1, kb);
+        cmdMemtest(kb);
+    } else if (!strcasecmp(cmd, "CAP")) {
+        uint32_t pin = 0, samples = 0, div = 0;
+        char *t1 = nextTok(p); if (t1) parseU32(t1, pin);
+        char *t2 = nextTok(p); if (t2) parseU32(t2, samples);
+        char *t3 = nextTok(p); if (t3) parseU32(t3, div);
+        cmdCapture(pin, samples, div);
+    } else if (!strcasecmp(cmd, "OSC")) {
+        uint32_t pin = 0, samples = 0, us = 0;
+        char *t1 = nextTok(p); if (t1) parseU32(t1, pin);
+        char *t2 = nextTok(p); if (t2) parseU32(t2, samples);
+        char *t3 = nextTok(p); if (t3) parseU32(t3, us);
+        cmdOsc(pin, samples, us);
     } else if (!strcasecmp(cmd, "MSPIWATCH")) {
         uint32_t ms = 0;
         char *t1 = nextTok(p);

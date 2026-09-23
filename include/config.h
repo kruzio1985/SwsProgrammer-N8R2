@@ -112,16 +112,17 @@
 #define WEB_STA_SSID    ""
 #define WEB_STA_PASSWORD ""
 
-/* Maksymalny rozmiar obrazu .bin wgrywanego przez WWW (w bajtach).
- * Moduł N8R2 ma tylko 320 kB RAM (bez włączonego PSRAM w tym wariancie
- * płytki), więc trzymamy limit nisko - firmware TLSR825x to zwykle < 64 kB. */
-#define WEB_MAX_FW      (64u * 1024u)
+/* Górny limit rozmiaru obrazu .bin wgrywanego przez WWW (w bajtach).
+ * To tylko górny limit - rzeczywista wartość jest wyliczana w locie na
+ * podstawie rozmiaru PSRAM (webui.cpp), więc N8R2 (2 MB PSRAM) i N16R8
+ * (8 MB PSRAM) automatycznie dostają właściwe limity. Firmware TLSR825x
+ * mieści się w 1 MB flasha docelowego. */
+#define WEB_MAX_FW      (1024u * 1024u)
 
-/* Limit pojedynczego wgrania SPI przez WWW (bajty). Bufor jest alokowany
- * w PSRAM (moduł N8R2 = 2 MB), więc można bezpiecznie trzymać 1 MB.
- * Większe obrazy wgrywaj w kawałkach zmieniając adres albo przez konsolę
- * SPIWRITE (strumieniowo, bez limitu RAM). */
-#define SPI_WEB_MAX     (1024u * 1024u)
+/* Górny limit pojedynczego wgrania SPI przez WWW (bajty). Bufor jest
+ * alokowany w PSRAM; rzeczywisty limit = min(ten limit, wolne PSRAM -
+ * margines na SD / przechwytywanie / oscyloskop). */
+#define SPI_WEB_MAX     (8u * 1024u * 1024u)
 
 /* =============================================================================
  * Porty szeregowe:

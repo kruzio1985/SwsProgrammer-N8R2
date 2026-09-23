@@ -1,11 +1,11 @@
-Ôªø# SWS Programmer ‚Äî Telink TLSR825x programmer on ESP32-S3 (N8R2)
+# SWS Programmer ó Telink TLSR825x programmer on ESP32-S3 (N8R2)
 
 Universal **ESP32-S3** programmer and debugging tool. Its main job is programming
 Telink **TLSR825x** chips (for example the Tuya **TS0201** temperature/humidity
-sensor) over the single-wire **SWS** interface ‚Äî no extra hardware is needed, the
+sensor) over the single-wire **SWS** interface ó no extra hardware is needed, the
 ESP32-S3 bit-bangs SWS directly from a GPIO. It also bundles a multi-protocol
-toolbox: SPI NOR flash, microSD card, UART, RS485, 1-Wire, I¬≤C, GPIO control and
-wireless flashing of other ESP chips ‚Äî all with a built-in web UI.
+toolbox: SPI NOR flash, microSD card, UART, RS485, 1-Wire, I2C, GPIO control and
+wireless flashing of other ESP chips ó all with a built-in web UI.
 
 > **This repository ships the `N8R2` build:** `ESP32-S3-DevKitC-1-N8R2`
 > with **8 MB (Quad SPI)** flash and **2 MB (Quad SPI)** PSRAM.
@@ -17,41 +17,48 @@ wireless flashing of other ESP chips ‚Äî all with a built-in web UI.
 
 ### Features
 
-- **SWS / Telink TLSR825x programmer** ‚Äî bit-banged single-wire programming
+- **SWS / Telink TLSR825x programmer** ó bit-banged single-wire programming
   (identify, read, erase, write, verify) of the target flash through the target's
   MSPI registers. Only 4 wires to the target: VCC, GND, SWS, RST.
-- **SPI NOR flash programmer** ‚Äî read/write 25xx chips in-circuit through a SOIC-8
+- **SPI NOR flash programmer** ó read/write 25xx chips in-circuit through a SOIC-8
   clip (2 MHz, safe for long clip leads).
-- **microSD card** ‚Äî SPI access, browse + upload/download + **format** from the web UI.
+- **microSD card** ó SPI access, browse + upload/download + **format** from the web UI.
 - **UART target** (115200 8N1) and **RS485** (half-duplex, MAX485/SN75176).
-- **1-Wire** (DS18B20 etc.) and **I¬≤C** bus scan / register read.
+- **1-Wire** (DS18B20 etc.) and **I2C** bus scan / register read.
 - **GPIO control** panel for the remaining free pins.
-- **ESP bridge** ‚Äî flash other ESP8266/ESP32/ESP32-C3 chips wirelessly over TCP
+- **ESP bridge** ó flash other ESP8266/ESP32/ESP32-C3 chips wirelessly over TCP
   (`esptool.py --port socket://<ip>:3232`) with automatic bootloader entry.
-- **Web UI** ‚Äî SoftAP `SWS-Programmer` / password `12345678`, open
+- **PSRAM diagnostics** ó uses the 8 MB PSRAM for a real memory stress test
+  (`MEMTEST`), a deep logic analyzer on any GPIO (`CAP <pin> <samples>`), and a
+  mini ADC oscilloscope (`OSC <pin> <samples> [us]`).
+- **Full-chip dumps to PSRAM** ó one click downloads the entire TLSR825x flash
+  (1 MB) or the SPI NOR flash as a single `.bin` backup, buffered in PSRAM.
+- **Firmware cache** ó the uploaded image stays in PSRAM, so you can re-verify or
+  re-flash it without uploading again; upload limits are computed from free PSRAM.
+- **Web UI** ó SoftAP `SWS-Programmer` / password `12345678`, open
   `http://192.168.4.1` in a browser. Optional STA mode (set in `include/config.h`).
 
 ### Pinout
 
 | Function        | ESP32-S3 pin | Notes                                   |
 |-----------------|--------------|-----------------------------------------|
-| SWS (data)      | GPIO42       | through 470 Œ© to target SWS             |
-| RST (reset)     | GPIO41       | through 470 Œ© to target RST             |
-| UART target TX  | GPIO17       | ESP32 ‚Üí target RX                       |
-| UART target RX  | GPIO18       | ESP32 ‚Üê target TX                       |
+| SWS (data)      | GPIO42       | through 470 ? to target SWS             |
+| RST (reset)     | GPIO41       | through 470 ? to target RST             |
+| UART target TX  | GPIO17       | ESP32 õ target RX                       |
+| UART target RX  | GPIO18       | ESP32 ã target TX                       |
 | RS485 TX / RX / DE | 33 / 34 / 35 | through MAX485/SN75176 transceiver      |
 | SD SCK/MISO/MOSI/CS | 14/15/16/21 | HSPI, Catalex microSD module            |
 | SPI flash SCK/MISO/MOSI/CS | 12/13/11/10 | FSPI, SOIC-8 clip, 2 MHz      |
-| I¬≤C SDA / SCL   | 8 / 9        | 4.7 kŒ© pull-ups                         |
-| 1-Wire          | GPIO4        | 4.7 kŒ© pull-up to 3V3                   |
+| I2C SDA / SCL   | 8 / 9        | 4.7 k? pull-ups                         |
+| 1-Wire          | GPIO4        | 4.7 k? pull-up to 3V3                   |
 | ESP bridge IO0 / EN | 5 / 6     | GPIO0 / EN of the target ESP            |
-| Console         | GPIO43 / 44  | UART0, 115200 8N1 (CH343 ‚Üí USB)         |
+| Console         | GPIO43 / 44  | UART0, 115200 8N1 (CH343 õ USB)         |
 
 ### Flashing the prebuilt firmware
 
-Prebuilt image: `firmware/sws_programmer_esp32s3_n8r2_v1.1.bin`.
+Prebuilt image: `firmware/sws_programmer_esp32s3_n8r2_v1.2.bin`.
 
-**Via PlatformIO** (recommended ‚Äî flashes bootloader + partition table + app):
+**Via PlatformIO** (recommended ó flashes bootloader + partition table + app):
 
 ```powershell
 pio run -e esp32s3 -t upload --upload-port COMx
@@ -60,7 +67,7 @@ pio run -e esp32s3 -t upload --upload-port COMx
 **Via esptool** (app image only, to a board that already has the Arduino partition table):
 
 ```powershell
-esptool.py --chip esp32s3 --port COMx --baud 921600 write_flash -z 0x10000 firmware\sws_programmer_esp32s3_n8r2_v1.1.bin
+esptool.py --chip esp32s3 --port COMx --baud 921600 write_flash -z 0x10000 firmware\sws_programmer_esp32s3_n8r2_v1.2.bin
 ```
 
 ### Build from source
@@ -78,8 +85,8 @@ ESP32 Arduino core (`platform = espressif32 @ ^6.7.0`).
 2. Join the Wi-Fi network **`SWS-Programmer`** (password `12345678`).
 3. Open `http://192.168.4.1` in a browser.
 
-You can reach the same UI via **mDNS** at `http://swsprog.local`, or ‚Äî after
-joining your home Wi-Fi in the *WiFi* tab ‚Äî at the board's DHCP address
+You can reach the same UI via **mDNS** at `http://swsprog.local`, or ó after
+joining your home Wi-Fi in the *WiFi* tab ó at the board's DHCP address
 (e.g. `http://192.168.1.195`). OTA updates use the same mDNS address
 (`http://swsprog.local`, password `swsprog`).
 
@@ -90,18 +97,18 @@ The UI is a single-page app with 12 tabs and an always-visible console
 
 | # | Tab | Function |
 |---|-----|----------|
-| 1 | üìå **Piny** | Pin legend ‚Äî every function (SWS, RST, UART, RS485, SPI flash, SD, 1-Wire, I¬≤C, ESP bridge) with its exact GPIO and notes. |
-| 2 | üîå **TLSR825x** | Main job: single-wire **SWS** programming of Telink TLSR825x. Detect chip (`CHIP` / `CHIPID`), `SWSTEST` link test, memory `STAT`, analog-register read/write/dump (ADC calibration), upload firmware, `Verify`, and `Flash` (erase + write + reset). |
-| 3 | üíæ **SPI Flash** | SOIC-8 25xx flash programmer. Detect chip (JEDEC), blank check, read to `.bin`, erase sectors / full chip, verify and write. |
-| 4 | üìü **UART** | Serial terminal (115200 8N1 default) on the target UART pins: start/stop, auto-baud, RX‚ÜíSD logging, send text or HEX. |
-| 5 | üîÅ **RS485** | Half-duplex terminal through a MAX485/SN75176 transceiver: start/stop, send text or HEX. |
-| 6 | üå°Ô∏è **1-Wire** | Bus scan and temperature read for DS18B20 / DS18S20 / DS1822 / iButton. |
-| 7 | üîó **I¬≤C** | Bus scan (1..126), register read, plus 24xx EEPROM (24C01..24C512) read/write with 8- or 16-bit addressing. |
-| 8 | ‚ö° **GPIO** | Control panel for the free pins (input / pull-up / pull-down / output, toggle) and a PWM generator (pin, frequency, duty). |
-| 9 | üì° **ESP (esptool)** | Flash other ESP8266 / ESP32 / ESP32-C3 wirelessly: bootloader entry, reset, and a TCP bridge on port 3232 (`esptool.py --port socket://<ip>:3232`). |
-| 10 | üí≥ **Karta SD** | microSD browser: file list, upload/download, delete, **format**, SD diagnostics. |
-| 11 | ü©∫ **Diagnostyka** | One-click diagnostics: `PINS`, `CHIP`, `SWSTEST`, `STAT`, `JEDEC`, `SPI`, `PROBE`, `VSCAN`, `VMEAS`, `WAVE` ‚Äî results go to the console. |
-| 12 | üì∂ **WiFi** | Scan networks, join your home Wi-Fi (STA), clear saved credentials, show AP/STA status. |
+| 1 | ?? **Piny** | Pin legend ó every function (SWS, RST, UART, RS485, SPI flash, SD, 1-Wire, I2C, ESP bridge) with its exact GPIO and notes. |
+| 2 | ?? **TLSR825x** | Main job: single-wire **SWS** programming of Telink TLSR825x. Detect chip (`CHIP` / `CHIPID`), `SWSTEST` link test, memory `STAT`, analog-register read/write/dump (ADC calibration), upload firmware, `Verify`, and `Flash` (erase + write + reset). |
+| 3 | ?? **SPI Flash** | SOIC-8 25xx flash programmer. Detect chip (JEDEC), blank check, read to `.bin`, erase sectors / full chip, verify and write. |
+| 4 | ?? **UART** | Serial terminal (115200 8N1 default) on the target UART pins: start/stop, auto-baud, RXõSD logging, send text or HEX. |
+| 5 | ?? **RS485** | Half-duplex terminal through a MAX485/SN75176 transceiver: start/stop, send text or HEX. |
+| 6 | ??? **1-Wire** | Bus scan and temperature read for DS18B20 / DS18S20 / DS1822 / iButton. |
+| 7 | ?? **I2C** | Bus scan (1..126), register read, plus 24xx EEPROM (24C01..24C512) read/write with 8- or 16-bit addressing. |
+| 8 | ? **GPIO** | Control panel for the free pins (input / pull-up / pull-down / output, toggle) and a PWM generator (pin, frequency, duty). |
+| 9 | ?? **ESP (esptool)** | Flash other ESP8266 / ESP32 / ESP32-C3 wirelessly: bootloader entry, reset, and a TCP bridge on port 3232 (`esptool.py --port socket://<ip>:3232`). |
+| 10 | ?? **Karta SD** | microSD browser: file list, upload/download, delete, **format**, SD diagnostics. |
+| 11 | ?? **Diagnostyka** | One-click diagnostics (`PINS`, `CHIP`, `SWSTEST`, `STAT`, `JEDEC`, `SPI`, `PROBE`, `VSCAN`, `VMEAS`, `WAVE`) plus PSRAM tools: `MEMTEST`, logic analyzer `CAP`, ADC scope `OSC`, full TLSR/SPI flash dumps and re-verify / re-flash from the cached buffer. |
+| 12 | ?? **WiFi** | Scan networks, join your home Wi-Fi (STA), clear saved credentials, show AP/STA status. |
 
 The console at the bottom accepts every command keyword directly
 (e.g. `SPI`, `SPIREAD 0 100`, `JEDEC`, `CHIP`, `STAT`, `SDLS`) and shows all
@@ -117,7 +124,7 @@ output in real time.
 |------|-------|--------|
 | <img src="docs/screenshots/uart.png" width="400"> | <img src="docs/screenshots/rs485.png" width="400"> | <img src="docs/screenshots/1wire.png" width="400"> |
 
-| I¬≤C | GPIO | ESP (esptool) |
+| I2C | GPIO | ESP (esptool) |
 |-----|------|---------------|
 | <img src="docs/screenshots/i2c.png" width="400"> | <img src="docs/screenshots/gpio.png" width="400"> | <img src="docs/screenshots/esp.png" width="400"> |
 
@@ -127,11 +134,11 @@ output in real time.
 
 ### License & attribution
 
-Licensed under the **PolyForm Noncommercial License 1.0.0** ‚Äî see [LICENSE](LICENSE).
+Licensed under the **PolyForm Noncommercial License 1.0.0** ó see [LICENSE](LICENSE).
 
 The SWS technique and flashing loader are based on prior art from
 [OpenEPaperLink](https://github.com/jjwbruijn/OpenEPaperLink) and
-[pvvx/TlsrComProg](https://github.com/pvvx/TlsrComProg) ‚Äî see the attributions
+[pvvx/TlsrComProg](https://github.com/pvvx/TlsrComProg) ó see the attributions
 in `platformio.ini` and the source headers.
 
 ---
@@ -140,97 +147,104 @@ in `platformio.ini` and the source headers.
 
 ### Funkcje
 
-- **Programator SWS / Telink TLSR825x** ‚Äî jednoprzewodowe programowanie
-  (identyfikacja, odczyt, kasowanie, zapis, weryfikacja) pamiƒôci flash uk≈Çadu
-  docelowego przez rejestry MSPI celu. Do celu idƒÖ tylko 4 przewody:
+- **Programator SWS / Telink TLSR825x** ó jednoprzewodowe programowanie
+  (identyfikacja, odczyt, kasowanie, zapis, weryfikacja) pamiÍci flash uk≥adu
+  docelowego przez rejestry MSPI celu. Do celu idπ tylko 4 przewody:
   VCC, GND, SWS, RST.
-- **Programator SPI NOR flash** ‚Äî odczyt/zapis ko≈õci 25xx przez klips SOIC-8
-  (2 MHz, bezpieczne przy d≈Çu≈ºszych przewodach klipsa).
-- **Karta microSD** ‚Äî dostƒôp po SPI, przeglƒÖdanie + upload/download + **formatowanie**
+- **Programator SPI NOR flash** ó odczyt/zapis koúci 25xx przez klips SOIC-8
+  (2 MHz, bezpieczne przy d≥uøszych przewodach klipsa).
+- **Karta microSD** ó dostÍp po SPI, przeglπdanie + upload/download + **formatowanie**
   z poziomu interfejsu WWW.
-- **UART celu** (115200 8N1) oraz **RS485** (p√≥≈Çdupleks, MAX485/SN75176).
-- **1-Wire** (DS18B20 itp.) i **I¬≤C** (skan magistrali / odczyt rejestr√≥w).
-- **Panel GPIO** dla pozosta≈Çych wolnych pin√≥w.
-- **Mostek ESP** ‚Äî programowanie innych ESP8266/ESP32/ESP32-C3 po sieci przez TCP
-  (`esptool.py --port socket://<ip>:3232`) z automatycznym wej≈õciem w bootloader.
-- **Interfejs WWW** ‚Äî SoftAP `SWS-Programmer` / has≈Ço `12345678`, otw√≥rz
-  `http://192.168.4.1` w przeglƒÖdarce. Opcjonalny tryb STA (ustaw w `include/config.h`).
+- **UART celu** (115200 8N1) oraz **RS485** (pÛ≥dupleks, MAX485/SN75176).
+- **1-Wire** (DS18B20 itp.) i **I2C** (skan magistrali / odczyt rejestrÛw).
+- **Panel GPIO** dla pozosta≥ych wolnych pinÛw.
+- **Mostek ESP** ó programowanie innych ESP8266/ESP32/ESP32-C3 po sieci przez TCP
+  (`esptool.py --port socket://<ip>:3232`) z automatycznym wejúciem w bootloader.
+- **Diagnostyka PSRAM** ó wykorzystuje 8 MB PSRAM do rzeczywistego testu pamiÍci
+  (`MEMTEST`), g≥Íbokiego analizatora stanÛw logicznych na dowolnym GPIO
+  (`CAP <pin> <prÛbki>`) oraz mini-oscyloskopu ADC (`OSC <pin> <prÛbki> [us]`).
+- **Zrzuty ca≥ych koúci do PSRAM** ó jednym klikniÍciem pobierzesz ca≥π pamiÍÊ
+  flash TLSR825x (1 MB) lub koúÊ SPI NOR jako pojedynczy plik `.bin` (bufor w PSRAM).
+- **Cache firmware** ó wgrany obraz zostaje w PSRAM, wiÍc moøesz go ponownie
+  zweryfikowaÊ lub wgraÊ bez ponownego uploadu; limity liczone z wolnego PSRAM.
+- **Interfejs WWW** ó SoftAP `SWS-Programmer` / has≥o `12345678`, otwÛrz
+  `http://192.168.4.1` w przeglπdarce. Opcjonalny tryb STA (ustaw w `include/config.h`).
 
 ### Piny
 
 | Funkcja         | Pin ESP32-S3 | Uwagi                                   |
 |-----------------|--------------|-----------------------------------------|
-| SWS (dane)      | GPIO42       | przez 470 Œ© do SWS celu                 |
-| RST (reset)     | GPIO41       | przez 470 Œ© do RST celu                 |
-| UART celu TX    | GPIO17       | ESP32 ‚Üí RX uk≈Çadu                       |
-| UART celu RX    | GPIO18       | ESP32 ‚Üê TX uk≈Çadu                       |
+| SWS (dane)      | GPIO42       | przez 470 ? do SWS celu                 |
+| RST (reset)     | GPIO41       | przez 470 ? do RST celu                 |
+| UART celu TX    | GPIO17       | ESP32 õ RX uk≥adu                       |
+| UART celu RX    | GPIO18       | ESP32 ã TX uk≥adu                       |
 | RS485 TX / RX / DE | 33 / 34 / 35 | przez transceiver MAX485/SN75176       |
-| SD SCK/MISO/MOSI/CS | 14/15/16/21 | HSPI, modu≈Ç Catalex microSD             |
+| SD SCK/MISO/MOSI/CS | 14/15/16/21 | HSPI, modu≥ Catalex microSD             |
 | SPI flash SCK/MISO/MOSI/CS | 12/13/11/10 | FSPI, klips SOIC-8, 2 MHz     |
-| I¬≤C SDA / SCL   | 8 / 9        | pull-up 4,7 kŒ©                          |
-| 1-Wire          | GPIO4        | pull-up 4,7 kŒ© do 3V3                   |
-| Mostek ESP IO0 / EN | 5 / 6     | GPIO0 / EN uk≈Çadu docelowego            |
-| Konsola         | GPIO43 / 44  | UART0, 115200 8N1 (CH343 ‚Üí USB)         |
+| I2C SDA / SCL   | 8 / 9        | pull-up 4,7 k?                          |
+| 1-Wire          | GPIO4        | pull-up 4,7 k? do 3V3                   |
+| Mostek ESP IO0 / EN | 5 / 6     | GPIO0 / EN uk≥adu docelowego            |
+| Konsola         | GPIO43 / 44  | UART0, 115200 8N1 (CH343 õ USB)         |
 
 ### Wgrywanie gotowego firmware
 
-Gotowy obraz: `firmware/sws_programmer_esp32s3_n8r2_v1.1.bin`.
+Gotowy obraz: `firmware/sws_programmer_esp32s3_n8r2_v1.2.bin`.
 
-**Przez PlatformIO** (zalecane ‚Äî wgrywa bootloader + tablicƒô partycji + aplikacjƒô):
+**Przez PlatformIO** (zalecane ó wgrywa bootloader + tablicÍ partycji + aplikacjÍ):
 
 ```powershell
 pio run -e esp32s3 -t upload --upload-port COMx
 ```
 
-**Przez esptool** (sam obraz aplikacji, na p≈Çytkƒô z ju≈º wgranƒÖ partycjƒÖ Arduino):
+**Przez esptool** (sam obraz aplikacji, na p≥ytkÍ z juø wgranπ partycjπ Arduino):
 
 ```powershell
-esptool.py --chip esp32s3 --port COMx --baud 921600 write_flash -z 0x10000 firmware\sws_programmer_esp32s3_n8r2_v1.1.bin
+esptool.py --chip esp32s3 --port COMx --baud 921600 write_flash -z 0x10000 firmware\sws_programmer_esp32s3_n8r2_v1.2.bin
 ```
 
-### Budowanie ze ≈∫r√≥de≈Ç
+### Budowanie ze ürÛde≥
 
 ```powershell
 pio run -e esp32s3
 ```
 
-Firmware buduje siƒô przy pomocy [PlatformIO](https://platformio.org/) i rdzenia
+Firmware buduje siÍ przy pomocy [PlatformIO](https://platformio.org/) i rdzenia
 ESP32 Arduino (`platform = espressif32 @ ^6.7.0`).
 
 ### Szybki start z interfejsem WWW
 
-1. Wgraj firmware i zasil p≈Çytkƒô.
-2. Po≈ÇƒÖcz siƒô z sieciƒÖ Wi-Fi **`SWS-Programmer`** (has≈Ço `12345678`).
-3. Otw√≥rz `http://192.168.4.1` w przeglƒÖdarce.
+1. Wgraj firmware i zasil p≥ytkÍ.
+2. Po≥πcz siÍ z sieciπ Wi-Fi **`SWS-Programmer`** (has≥o `12345678`).
+3. OtwÛrz `http://192.168.4.1` w przeglπdarce.
 
 Ten sam interfejs otworzysz przez **mDNS** pod `http://swsprog.local`, a po
-do≈ÇƒÖczeniu do domowej sieci Wi-Fi (zak≈Çadka *WiFi*) ‚Äî pod adresem DHCP p≈Çytki
-(np. `http://192.168.1.195`). Aktualizacja OTA u≈ºywa tego samego adresu mDNS
-(`http://swsprog.local`, has≈Ço `swsprog`).
+do≥πczeniu do domowej sieci Wi-Fi (zak≥adka *WiFi*) ó pod adresem DHCP p≥ytki
+(np. `http://192.168.1.195`). Aktualizacja OTA uøywa tego samego adresu mDNS
+(`http://swsprog.local`, has≥o `swsprog`).
 
-#### Opis wszystkich zak≈Çadek
+#### Opis wszystkich zak≥adek
 
-Interfejs to aplikacja jednostronicowa z 12 zak≈Çadkami i zawsze widocznƒÖ
-konsolƒÖ (log + linia polece≈Ñ) na dole strony.
+Interfejs to aplikacja jednostronicowa z 12 zak≥adkami i zawsze widocznπ
+konsolπ (log + linia poleceÒ) na dole strony.
 
-| # | Zak≈Çadka | Funkcja |
+| # | Zak≥adka | Funkcja |
 |---|----------|---------|
-| 1 | üìå **Piny** | Legenda pin√≥w ‚Äî ka≈ºda funkcja (SWS, RST, UART, RS485, SPI flash, SD, 1-Wire, I¬≤C, mostek ESP) z dok≈Çadnym numerem GPIO i uwagami. |
-| 2 | üîå **TLSR825x** | G≈Ç√≥wne zadanie: jednoprzewodowe programowanie **SWS** uk≈Çad√≥w Telink TLSR825x. Wykrywanie uk≈Çadu (`CHIP` / `CHIPID`), test ≈ÇƒÖcza `SWSTEST`, status pamiƒôci `STAT`, odczyt/zapis/zrzut rejestr√≥w analogowych (kalibracja ADC), wgranie firmware, `Verify` oraz `Flash` (kasowanie + zapis + reset). |
-| 3 | üíæ **SPI Flash** | Programator ko≈õci 25xx przez klips SOIC-8. Wykrywanie ko≈õci (JEDEC), blank check, odczyt do `.bin`, kasowanie sektor√≥w / ca≈Çej ko≈õci, weryfikacja i zapis. |
-| 4 | üìü **UART** | Terminal szeregowy (domy≈õlnie 115200 8N1) na pinach UART celu: start/stop, auto-baud, logowanie RX‚ÜíSD, wysy≈Çanie tekstu lub HEX. |
-| 5 | üîÅ **RS485** | Terminal p√≥≈Çdupleksowy przez transceiver MAX485/SN75176: start/stop, wysy≈Çanie tekstu lub HEX. |
-| 6 | üå°Ô∏è **1-Wire** | Skanowanie szyny i odczyt temperatury dla DS18B20 / DS18S20 / DS1822 / iButton. |
-| 7 | üîó **I¬≤C** | Skanowanie magistrali (1..126), odczyt rejestr√≥w oraz odczyt/zapis EEPROM 24xx (24C01..24C512) z adresacjƒÖ 8- lub 16-bitowƒÖ. |
-| 8 | ‚ö° **GPIO** | Panel sterowania wolnymi pinami (wej≈õcie / pull-up / pull-down / wyj≈õcie, prze≈ÇƒÖczanie) oraz generator PWM (pin, czƒôstotliwo≈õƒá, wype≈Çnienie). |
-| 9 | üì° **ESP (esptool)** | Programowanie obcych ESP8266 / ESP32 / ESP32-C3 po sieci: wej≈õcie w bootloader, reset oraz mostek TCP na porcie 3232 (`esptool.py --port socket://<ip>:3232`). |
-| 10 | üí≥ **Karta SD** | PrzeglƒÖdarka microSD: lista plik√≥w, upload/download, usuwanie, **formatowanie**, diagnostyka SD. |
-| 11 | ü©∫ **Diagnostyka** | Diagnostyka jednym klikniƒôciem: `PINS`, `CHIP`, `SWSTEST`, `STAT`, `JEDEC`, `SPI`, `PROBE`, `VSCAN`, `VMEAS`, `WAVE` ‚Äî wyniki trafiajƒÖ do konsoli. |
-| 12 | üì∂ **WiFi** | Skanowanie sieci, do≈ÇƒÖczanie do domowego Wi-Fi (STA), usuwanie zapisanych danych, status AP/STA. |
+| 1 | ?? **Piny** | Legenda pinÛw ó kaøda funkcja (SWS, RST, UART, RS485, SPI flash, SD, 1-Wire, I2C, mostek ESP) z dok≥adnym numerem GPIO i uwagami. |
+| 2 | ?? **TLSR825x** | G≥Ûwne zadanie: jednoprzewodowe programowanie **SWS** uk≥adÛw Telink TLSR825x. Wykrywanie uk≥adu (`CHIP` / `CHIPID`), test ≥πcza `SWSTEST`, status pamiÍci `STAT`, odczyt/zapis/zrzut rejestrÛw analogowych (kalibracja ADC), wgranie firmware, `Verify` oraz `Flash` (kasowanie + zapis + reset). |
+| 3 | ?? **SPI Flash** | Programator koúci 25xx przez klips SOIC-8. Wykrywanie koúci (JEDEC), blank check, odczyt do `.bin`, kasowanie sektorÛw / ca≥ej koúci, weryfikacja i zapis. |
+| 4 | ?? **UART** | Terminal szeregowy (domyúlnie 115200 8N1) na pinach UART celu: start/stop, auto-baud, logowanie RXõSD, wysy≥anie tekstu lub HEX. |
+| 5 | ?? **RS485** | Terminal pÛ≥dupleksowy przez transceiver MAX485/SN75176: start/stop, wysy≥anie tekstu lub HEX. |
+| 6 | ??? **1-Wire** | Skanowanie szyny i odczyt temperatury dla DS18B20 / DS18S20 / DS1822 / iButton. |
+| 7 | ?? **I2C** | Skanowanie magistrali (1..126), odczyt rejestrÛw oraz odczyt/zapis EEPROM 24xx (24C01..24C512) z adresacjπ 8- lub 16-bitowπ. |
+| 8 | ? **GPIO** | Panel sterowania wolnymi pinami (wejúcie / pull-up / pull-down / wyjúcie, prze≥πczanie) oraz generator PWM (pin, czÍstotliwoúÊ, wype≥nienie). |
+| 9 | ?? **ESP (esptool)** | Programowanie obcych ESP8266 / ESP32 / ESP32-C3 po sieci: wejúcie w bootloader, reset oraz mostek TCP na porcie 3232 (`esptool.py --port socket://<ip>:3232`). |
+| 10 | ?? **Karta SD** | Przeglπdarka microSD: lista plikÛw, upload/download, usuwanie, **formatowanie**, diagnostyka SD. |
+| 11 | ?? **Diagnostyka** | Diagnostyka jednym klikniÍciem (`PINS`, `CHIP`, `SWSTEST`, `STAT`, `JEDEC`, `SPI`, `PROBE`, `VSCAN`, `VMEAS`, `WAVE`) oraz narzÍdzia PSRAM: `MEMTEST`, analizator logiczny `CAP`, oscyloskop ADC `OSC`, zrzuty ca≥ych koúci TLSR/SPI i ponowna weryfikacja / wgranie z bufora. |
+| 12 | ?? **WiFi** | Skanowanie sieci, do≥πczanie do domowego Wi-Fi (STA), usuwanie zapisanych danych, status AP/STA. |
 
-Konsola na dole przyjmuje ka≈ºde s≈Çowo kluczowe polecenia bezpo≈õrednio
+Konsola na dole przyjmuje kaøde s≥owo kluczowe polecenia bezpoúrednio
 (np. `SPI`, `SPIREAD 0 100`, `JEDEC`, `CHIP`, `STAT`, `SDLS`) i pokazuje
-ca≈Çy wynik na ≈ºywo.
+ca≥y wynik na øywo.
 
 #### Zrzuty ekranu
 
@@ -242,7 +256,7 @@ ca≈Çy wynik na ≈ºywo.
 |------|-------|--------|
 | <img src="docs/screenshots/uart.png" width="400"> | <img src="docs/screenshots/rs485.png" width="400"> | <img src="docs/screenshots/1wire.png" width="400"> |
 
-| I¬≤C | GPIO | ESP (esptool) |
+| I2C | GPIO | ESP (esptool) |
 |-----|------|---------------|
 | <img src="docs/screenshots/i2c.png" width="400"> | <img src="docs/screenshots/gpio.png" width="400"> | <img src="docs/screenshots/esp.png" width="400"> |
 
@@ -252,9 +266,9 @@ ca≈Çy wynik na ≈ºywo.
 
 ### Licencja i atrybucja
 
-Licencja **PolyForm Noncommercial License 1.0.0** ‚Äî zobacz [LICENSE](LICENSE).
+Licencja **PolyForm Noncommercial License 1.0.0** ó zobacz [LICENSE](LICENSE).
 
-Technika SWS i loader opierajƒÖ siƒô na wcze≈õniejszych pracach
+Technika SWS i loader opierajπ siÍ na wczeúniejszych pracach
 [OpenEPaperLink](https://github.com/jjwbruijn/OpenEPaperLink) oraz
-[pvvx/TlsrComProg](https://github.com/pvvx/TlsrComProg) ‚Äî atrybucje znajdujƒÖ siƒô
-w `platformio.ini` i nag≈Ç√≥wkach ≈∫r√≥de≈Ç.
+[pvvx/TlsrComProg](https://github.com/pvvx/TlsrComProg) ó atrybucje znajdujπ siÍ
+w `platformio.ini` i nag≥Ûwkach ürÛde≥.
