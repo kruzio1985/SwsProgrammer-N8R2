@@ -1,0 +1,13 @@
+﻿# Build artefacts
+.pio/
+build/
+
+# Local / scratch
+tmp/
+backup/
+.vscode/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
