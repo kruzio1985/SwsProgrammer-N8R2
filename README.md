@@ -78,6 +78,53 @@ ESP32 Arduino core (`platform = espressif32 @ ^6.7.0`).
 2. Join the Wi-Fi network **`SWS-Programmer`** (password `12345678`).
 3. Open `http://192.168.4.1` in a browser.
 
+You can reach the same UI via **mDNS** at `http://swsprog.local`, or — after
+joining your home Wi-Fi in the *WiFi* tab — at the board's DHCP address
+(e.g. `http://192.168.1.195`). OTA updates use the same mDNS address
+(`http://swsprog.local`, password `swsprog`).
+
+#### Every tab explained
+
+The UI is a single-page app with 12 tabs and an always-visible console
+(log + command line) at the bottom.
+
+| # | Tab | Function |
+|---|-----|----------|
+| 1 | 📌 **Piny** | Pin legend — every function (SWS, RST, UART, RS485, SPI flash, SD, 1-Wire, I²C, ESP bridge) with its exact GPIO and notes. |
+| 2 | 🔌 **TLSR825x** | Main job: single-wire **SWS** programming of Telink TLSR825x. Detect chip (`CHIP` / `CHIPID`), `SWSTEST` link test, memory `STAT`, analog-register read/write/dump (ADC calibration), upload firmware, `Verify`, and `Flash` (erase + write + reset). |
+| 3 | 💾 **SPI Flash** | SOIC-8 25xx flash programmer. Detect chip (JEDEC), blank check, read to `.bin`, erase sectors / full chip, verify and write. |
+| 4 | 📟 **UART** | Serial terminal (115200 8N1 default) on the target UART pins: start/stop, auto-baud, RX→SD logging, send text or HEX. |
+| 5 | 🔁 **RS485** | Half-duplex terminal through a MAX485/SN75176 transceiver: start/stop, send text or HEX. |
+| 6 | 🌡️ **1-Wire** | Bus scan and temperature read for DS18B20 / DS18S20 / DS1822 / iButton. |
+| 7 | 🔗 **I²C** | Bus scan (1..126), register read, plus 24xx EEPROM (24C01..24C512) read/write with 8- or 16-bit addressing. |
+| 8 | ⚡ **GPIO** | Control panel for the free pins (input / pull-up / pull-down / output, toggle) and a PWM generator (pin, frequency, duty). |
+| 9 | 📡 **ESP (esptool)** | Flash other ESP8266 / ESP32 / ESP32-C3 wirelessly: bootloader entry, reset, and a TCP bridge on port 3232 (`esptool.py --port socket://<ip>:3232`). |
+| 10 | 💳 **Karta SD** | microSD browser: file list, upload/download, delete, **format**, SD diagnostics. |
+| 11 | 🩺 **Diagnostyka** | One-click diagnostics: `PINS`, `CHIP`, `SWSTEST`, `STAT`, `JEDEC`, `SPI`, `PROBE`, `VSCAN`, `VMEAS`, `WAVE` — results go to the console. |
+| 12 | 📶 **WiFi** | Scan networks, join your home Wi-Fi (STA), clear saved credentials, show AP/STA status. |
+
+The console at the bottom accepts every command keyword directly
+(e.g. `SPI`, `SPIREAD 0 100`, `JEDEC`, `CHIP`, `STAT`, `SDLS`) and shows all
+output in real time.
+
+#### Screenshots
+
+| Piny | TLSR825x | SPI Flash |
+|------|----------|-----------|
+| <img src="docs/screenshots/piny.png" width="400"> | <img src="docs/screenshots/tlsr825x.png" width="400"> | <img src="docs/screenshots/spi_flash.png" width="400"> |
+
+| UART | RS485 | 1-Wire |
+|------|-------|--------|
+| <img src="docs/screenshots/uart.png" width="400"> | <img src="docs/screenshots/rs485.png" width="400"> | <img src="docs/screenshots/1wire.png" width="400"> |
+
+| I²C | GPIO | ESP (esptool) |
+|-----|------|---------------|
+| <img src="docs/screenshots/i2c.png" width="400"> | <img src="docs/screenshots/gpio.png" width="400"> | <img src="docs/screenshots/esp.png" width="400"> |
+
+| Karta SD | Diagnostyka | WiFi |
+|----------|-------------|------|
+| <img src="docs/screenshots/sd.png" width="400"> | <img src="docs/screenshots/diag.png" width="400"> | <img src="docs/screenshots/wifi.png" width="400"> |
+
 ### License & attribution
 
 Licensed under the **PolyForm Noncommercial License 1.0.0** — see [LICENSE](LICENSE).
@@ -155,6 +202,53 @@ ESP32 Arduino (`platform = espressif32 @ ^6.7.0`).
 1. Wgraj firmware i zasil płytkę.
 2. Połącz się z siecią Wi-Fi **`SWS-Programmer`** (hasło `12345678`).
 3. Otwórz `http://192.168.4.1` w przeglądarce.
+
+Ten sam interfejs otworzysz przez **mDNS** pod `http://swsprog.local`, a po
+dołączeniu do domowej sieci Wi-Fi (zakładka *WiFi*) — pod adresem DHCP płytki
+(np. `http://192.168.1.195`). Aktualizacja OTA używa tego samego adresu mDNS
+(`http://swsprog.local`, hasło `swsprog`).
+
+#### Opis wszystkich zakładek
+
+Interfejs to aplikacja jednostronicowa z 12 zakładkami i zawsze widoczną
+konsolą (log + linia poleceń) na dole strony.
+
+| # | Zakładka | Funkcja |
+|---|----------|---------|
+| 1 | 📌 **Piny** | Legenda pinów — każda funkcja (SWS, RST, UART, RS485, SPI flash, SD, 1-Wire, I²C, mostek ESP) z dokładnym numerem GPIO i uwagami. |
+| 2 | 🔌 **TLSR825x** | Główne zadanie: jednoprzewodowe programowanie **SWS** układów Telink TLSR825x. Wykrywanie układu (`CHIP` / `CHIPID`), test łącza `SWSTEST`, status pamięci `STAT`, odczyt/zapis/zrzut rejestrów analogowych (kalibracja ADC), wgranie firmware, `Verify` oraz `Flash` (kasowanie + zapis + reset). |
+| 3 | 💾 **SPI Flash** | Programator kości 25xx przez klips SOIC-8. Wykrywanie kości (JEDEC), blank check, odczyt do `.bin`, kasowanie sektorów / całej kości, weryfikacja i zapis. |
+| 4 | 📟 **UART** | Terminal szeregowy (domyślnie 115200 8N1) na pinach UART celu: start/stop, auto-baud, logowanie RX→SD, wysyłanie tekstu lub HEX. |
+| 5 | 🔁 **RS485** | Terminal półdupleksowy przez transceiver MAX485/SN75176: start/stop, wysyłanie tekstu lub HEX. |
+| 6 | 🌡️ **1-Wire** | Skanowanie szyny i odczyt temperatury dla DS18B20 / DS18S20 / DS1822 / iButton. |
+| 7 | 🔗 **I²C** | Skanowanie magistrali (1..126), odczyt rejestrów oraz odczyt/zapis EEPROM 24xx (24C01..24C512) z adresacją 8- lub 16-bitową. |
+| 8 | ⚡ **GPIO** | Panel sterowania wolnymi pinami (wejście / pull-up / pull-down / wyjście, przełączanie) oraz generator PWM (pin, częstotliwość, wypełnienie). |
+| 9 | 📡 **ESP (esptool)** | Programowanie obcych ESP8266 / ESP32 / ESP32-C3 po sieci: wejście w bootloader, reset oraz mostek TCP na porcie 3232 (`esptool.py --port socket://<ip>:3232`). |
+| 10 | 💳 **Karta SD** | Przeglądarka microSD: lista plików, upload/download, usuwanie, **formatowanie**, diagnostyka SD. |
+| 11 | 🩺 **Diagnostyka** | Diagnostyka jednym kliknięciem: `PINS`, `CHIP`, `SWSTEST`, `STAT`, `JEDEC`, `SPI`, `PROBE`, `VSCAN`, `VMEAS`, `WAVE` — wyniki trafiają do konsoli. |
+| 12 | 📶 **WiFi** | Skanowanie sieci, dołączanie do domowego Wi-Fi (STA), usuwanie zapisanych danych, status AP/STA. |
+
+Konsola na dole przyjmuje każde słowo kluczowe polecenia bezpośrednio
+(np. `SPI`, `SPIREAD 0 100`, `JEDEC`, `CHIP`, `STAT`, `SDLS`) i pokazuje
+cały wynik na żywo.
+
+#### Zrzuty ekranu
+
+| Piny | TLSR825x | SPI Flash |
+|------|----------|-----------|
+| <img src="docs/screenshots/piny.png" width="400"> | <img src="docs/screenshots/tlsr825x.png" width="400"> | <img src="docs/screenshots/spi_flash.png" width="400"> |
+
+| UART | RS485 | 1-Wire |
+|------|-------|--------|
+| <img src="docs/screenshots/uart.png" width="400"> | <img src="docs/screenshots/rs485.png" width="400"> | <img src="docs/screenshots/1wire.png" width="400"> |
+
+| I²C | GPIO | ESP (esptool) |
+|-----|------|---------------|
+| <img src="docs/screenshots/i2c.png" width="400"> | <img src="docs/screenshots/gpio.png" width="400"> | <img src="docs/screenshots/esp.png" width="400"> |
+
+| Karta SD | Diagnostyka | WiFi |
+|----------|-------------|------|
+| <img src="docs/screenshots/sd.png" width="400"> | <img src="docs/screenshots/diag.png" width="400"> | <img src="docs/screenshots/wifi.png" width="400"> |
 
 ### Licencja i atrybucja
 
